@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Daily Prayer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Georgia', serif;
+      overflow: hidden;
+    }
+
+    .stars {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .star {
+      position: absolute;
+      background: white;
+      border-radius: 50%;
+      animation: twinkle 3s infinite alternate;
+    }
+    @keyframes twinkle {
+      0%   { opacity: 0.1; transform: scale(1); }
+      100% { opacity: 0.8; transform: scale(1.3); }
+    }
+
+    .modal {
+      position: relative;
+      z-index: 10;
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 24px;
+      padding: 48px 52px;
+      max-width: 640px;
+      width: 92%;
+      text-align: center;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+      animation: fadeIn 0.8s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(24px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .cross-icon { font-size: 2.4rem; margin-bottom: 12px; display: block; filter: drop-shadow(0 0 12px rgba(255,220,100,0.6)); }
+    .greeting   { font-size: 0.85rem; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,220,100,0.75); margin-bottom: 8px; }
+    .date       { font-size: 0.8rem; color: rgba(255,255,255,0.35); margin-bottom: 32px; letter-spacing: 0.08em; }
+
+    .prayer-type {
+      display: inline-block;
+      font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: rgba(255,220,100,0.6);
+      background: rgba(255,220,100,0.08);
+      border: 1px solid rgba(255,220,100,0.2);
+      border-radius: 20px; padding: 4px 14px; margin-bottom: 20px;
+    }
+    .prayer-title { font-size: 1.45rem; color: #fff; margin-bottom: 24px; font-weight: normal; }
+    .prayer-text  { font-size: 1.05rem; line-height: 1.85; color: rgba(255,255,255,0.82); font-style: italic; margin-bottom: 32px; min-height: 80px; }
+
+    .loading { display: flex; justify-content: center; gap: 8px; margin: 20px 0; }
+    .loading span { width: 8px; height: 8px; background: rgba(255,220,100,0.6); border-radius: 50%; animation: bounce 1.2s infinite; }
+    .loading span:nth-child(2) { animation-delay: 0.2s; }
+    .loading span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%,80%,100% { transform: scale(0.6); opacity: 0.4; }
+      40%          { transform: scale(1);   opacity: 1;   }
+    }
+
+    .verse   { font-size: 0.8rem; color: rgba(255,220,100,0.55); margin-bottom: 36px; letter-spacing: 0.04em; }
+    .divider { width: 60px; height: 1px; background: linear-gradient(to right, transparent, rgba(255,220,100,0.4), transparent); margin: 0 auto 28px; }
+
+    .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      padding: 12px 28px; border-radius: 50px; font-size: 0.85rem;
+      letter-spacing: 0.06em; cursor: pointer; border: none;
+      transition: all 0.2s ease; font-family: 'Georgia', serif;
+    }
+    .btn-primary { background: linear-gradient(135deg, #f5c842, #e0a020); color: #1a1200; font-weight: bold; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(240,180,30,0.35); }
+    .btn-secondary { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.15); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.12); color: #fff; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+
+    .footer-note { margin-top: 28px; font-size: 0.72rem; color: rgba(255,255,255,0.2); letter-spacing: 0.05em; }
+    .error-msg   { color: rgba(255,120,120,0.8); font-size: 0.88rem; margin-bottom: 16px; font-style: normal; }
+
+    .source-badge {
+      display: inline-block; margin-top: 16px;
+      font-size: 0.68rem; color: rgba(255,255,255,0.15);
+      letter-spacing: 0.06em;
+    }
+  </style>
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+
+<div class="modal">
+  <span class="cross-icon">✝</span>
+  <div class="greeting" id="greeting">Good Morning</div>
+  <div class="date" id="date-display"></div>
+
+  <span class="prayer-type" id="prayer-type">Daily Prayer</span>
+  <h2 class="prayer-title" id="prayer-title">Loading your prayer…</h2>
+
+  <div class="prayer-text" id="prayer-text">
+    <div class="loading"><span></span><span></span><span></span></div>
+  </div>
+
+  <div class="verse" id="prayer-verse"></div>
+  <div class="divider"></div>
+
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="closeModal()">Begin My Day →</button>
+  </div>
+
+  <div class="footer-note">✝ A new prayer is prepared for you each morning</div>
+</div>
+
+<script>
+  // ─────────────────────────────────────────────────────────────────
+  // 🔧 CONFIGURE THIS: paste your Gist raw URL here
+  //    It looks like:
+  //    https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/prayer.json
+  // ─────────────────────────────────────────────────────────────────
+  const GIST_RAW_URL = 'https://gist.githubusercontent.com/YOUR_USERNAME/YOUR_GIST_ID/raw/prayer.json';
+
+  // ── Stars ─────────────────────────────────────────────────────────
+  const starsEl = document.getElementById('stars');
+  for (let i = 0; i < 80; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 2.5 + 0.5;
+    s.style.cssText = `width:${size}px;height:${size}px;top:${Math.random()*100}%;left:${Math.random()*100}%;animation-delay:${Math.random()*4}s;animation-duration:${2+Math.random()*3}s;`;
+    starsEl.appendChild(s);
+  }
+
+  // ── Greeting & Date ───────────────────────────────────────────────
+  const now = new Date();
+  document.getElementById('date-display').textContent =
+    now.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const h = now.getHours();
+  document.getElementById('greeting').textContent =
+    h < 12 ? 'Good Morning' : h < 17 ? 'Good Afternoon' : 'Good Evening';
+
+  // ── Cache key (one prayer per day) ────────────────────────────────
+  const todayKey = `prayer_${now.toISOString().slice(0,10)}`;
+
+  // ── Render ────────────────────────────────────────────────────────
+  function renderPrayer(p) {
+    document.getElementById('prayer-type').textContent  = p.type  || 'Daily Prayer';
+    document.getElementById('prayer-title').textContent = p.title || 'Today\'s Prayer';
+    document.getElementById('prayer-text').textContent  = p.prayer;
+    document.getElementById('prayer-verse').textContent = p.verse || '';
+  }
+
+  function renderError() {
+    document.getElementById('prayer-type').textContent  = 'Daily Prayer';
+    document.getElementById('prayer-title').textContent = 'Could not load prayer';
+    document.getElementById('prayer-text').innerHTML =
+      `<div class="error-msg">Unable to fetch today's prayer.</div>
+       <div style="color:rgba(255,255,255,0.45);font-size:0.85rem;font-style:normal;line-height:1.6">
+         Make sure your Gist URL is set correctly in <code>newtab.html</code>.<br>
+         Check the README for setup instructions.
+       </div>`;
+  }
+
+  // ── Fetch from Gist ───────────────────────────────────────────────
+  async function loadPrayer() {
+    // Check cache first
+    try {
+      const cached = await new Promise(res => {
+        chrome.storage.local.get([todayKey], r => res(r[todayKey] || null));
+      });
+      if (cached) { renderPrayer(cached); return; }
+    } catch {}
+
+    // Fetch from Gist — add cache-buster so we always get today's version
+    try {
+      const url = GIST_RAW_URL + '?t=' + now.toISOString().slice(0,10);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Fetch failed');
+
+      const prayer = await response.json();
+      renderPrayer(prayer);
+
+      // Cache for this session
+      try {
+        chrome.storage.local.set({ [todayKey]: prayer });
+      } catch {}
+
+    } catch (e) {
+      console.error(e);
+      renderError();
+    }
+  }
+
+  function closeModal() {
+    document.querySelector('.modal').style.cssText +=
+      'transition:opacity 0.4s,transform 0.4s;opacity:0;transform:scale(0.95)';
+    setTimeout(() => document.querySelector('.modal').style.display = 'none', 400);
+  }
+
+  loadPrayer();
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+name: Generate Daily Prayer
+
+on:
+  schedule:
+    # Runs every day at 6:00 AM Philippine Time (PHT = UTC+8, so 10:00 PM UTC)
+    - cron: '0 22 * * *'
+  workflow_dispatch: # also lets you trigger it manually from GitHub
+
+jobs:
+  generate-prayer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate prayer and update Gist
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+        run: node scripts/generate-prayer.js
