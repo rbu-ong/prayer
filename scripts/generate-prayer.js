@@ -1,9 +1,10 @@
 // scripts/generate-prayer.js
-// Runs via GitHub Actions every day — generates a random prayer and updates your Gist
+// Runs via GitHub Actions every day
+// Generates 50 random prayers in ONE API call and saves them to your Gist
 
 const https = require('https');
 
-// ── Prayer types — one is picked randomly each day ────────────────────────────
+// ── Prayer types pool (50 will be randomly picked from this list) ─────────────
 const PRAYER_TYPES = [
   'Morning Prayer',
   'Prayer of Gratitude',
@@ -20,9 +21,29 @@ const PRAYER_TYPES = [
   'Prayer for Courage',
   'Prayer of Thanksgiving',
   'Prayer for Joy',
+  'Prayer for Patience',
+  'Prayer for Forgiveness',
+  'Prayer for Humility',
+  'Prayer for Faith',
+  'Prayer for Love',
+  'Prayer for New Beginnings',
+  'Prayer for Perseverance',
+  'Prayer of Adoration',
+  'Prayer for the Broken-Hearted',
+  'Prayer for Clarity',
 ];
 
-// ── Helper: HTTPS POST/PATCH ──────────────────────────────────────────────────
+// Shuffle and pick 50 (with repeats allowed if pool < 50)
+function pickTypes(count) {
+  const result = [];
+  const pool = [...PRAYER_TYPES];
+  for (let i = 0; i < count; i++) {
+    result.push(pool[Math.floor(Math.random() * pool.length)]);
+  }
+  return result;
+}
+
+// ── Helper: HTTPS request ─────────────────────────────────────────────────────
 function request(options, body) {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
@@ -42,42 +63,55 @@ function request(options, body) {
   });
 }
 
-// ── Step 1: Call Anthropic API ────────────────────────────────────────────────
-async function generatePrayer(type) {
-  console.log(`✝  Generating "${type}"...`);
+// ── Step 1: Call OpenAI — generate all 50 prayers in one shot ────────────────
+async function generate50Prayers() {
+  const types = pickTypes(50);
+  console.log('✝  Generating 50 prayers in one API call...');
 
   const res = await request(
     {
-      hostname: 'api.anthropic.com',
-      path: '/v1/messages',
+      hostname: 'api.openai.com',
+      path: '/v1/chat/completions',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
       },
     },
     {
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
+      model: 'gpt-4o-mini',
+      max_tokens: 16000,
+      response_format: { type: 'json_object' },
       messages: [
         {
+          role: 'system',
+          content: 'You are a Christian prayer writer. Always respond with valid JSON only — no markdown, no backticks, no extra explanation.',
+        },
+        {
           role: 'user',
-          content: `Generate a beautiful, heartfelt Christian "${type}" for someone starting their day.
+          content: `Generate exactly 50 unique Christian prayers. Each prayer should be 90–100 words long.
 
-The prayer should be:
-- 4–6 sentences long
-- Personal and warm in tone
-- Grounded in Christian faith
-- Uplifting and encouraging
-- Written in first person (addressing God / Lord / Heavenly Father)
+Use these prayer types in this exact order:
+${types.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 
-Respond ONLY with a valid JSON object — no markdown, no backticks, no explanation:
+Rules for each prayer:
+- 90–100 words (count carefully)
+- Warm, personal, heartfelt tone
+- Written in first person addressing God / Lord / Heavenly Father
+- Uplifting and grounded in Christian faith
+- Each one must feel unique — no repetitive phrasing across prayers
+
+Respond ONLY with this JSON structure:
 {
-  "type": "${type}",
-  "title": "a short evocative prayer title (3–6 words)",
-  "prayer": "the full prayer text",
-  "verse": "one relevant Bible verse with reference, e.g. \\"The Lord is my shepherd.\\" — Psalm 23:1"
+  "prayers": [
+    {
+      "id": 1,
+      "type": "the prayer type",
+      "title": "short evocative title (3–6 words)",
+      "prayer": "the full prayer text (90–100 words)",
+      "verse": "one Bible verse with reference e.g. \\"Be still and know that I am God.\\" — Psalm 46:10"
+    }
+  ]
 }`,
         },
       ],
@@ -85,25 +119,33 @@ Respond ONLY with a valid JSON object — no markdown, no backticks, no explanat
   );
 
   if (res.status !== 200) {
-    throw new Error(`Anthropic API error ${res.status}: ${JSON.stringify(res.body)}`);
+    throw new Error(`OpenAI API error ${res.status}: ${JSON.stringify(res.body)}`);
   }
 
-  const text = res.body.content.find(b => b.type === 'text')?.text || '';
+  const text = res.body.choices?.[0]?.message?.content || '';
   const clean = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean);
+  const parsed = JSON.parse(clean);
+
+  if (!parsed.prayers || parsed.prayers.length === 0) {
+    throw new Error('No prayers returned from OpenAI');
+  }
+
+  console.log(`✅ Received ${parsed.prayers.length} prayers from OpenAI`);
+  return parsed.prayers;
 }
 
-// ── Step 2: Update GitHub Gist ────────────────────────────────────────────────
-async function updateGist(prayer) {
+// ── Step 2: Save all 50 prayers to GitHub Gist ───────────────────────────────
+async function updateGist(prayers) {
   const today = new Date().toISOString().slice(0, 10);
+
   const payload = {
-    ...prayer,
     date: today,
     generated_at: new Date().toISOString(),
+    total: prayers.length,
+    prayers: prayers,
   };
 
-  console.log('📄 Updating Gist...');
-  console.log(JSON.stringify(payload, null, 2));
+  console.log('📄 Saving to Gist...');
 
   const res = await request(
     {
@@ -130,20 +172,17 @@ async function updateGist(prayer) {
   }
 
   const rawUrl = res.body.files?.['prayer.json']?.raw_url;
-  console.log(`✅ Gist updated! Raw URL: ${rawUrl}`);
+  console.log(`✅ Gist updated! ${prayers.length} prayers saved.`);
+  console.log(`📎 Raw URL: ${rawUrl}`);
   return rawUrl;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 (async () => {
   try {
-    // Pick a random prayer type
-    const type = PRAYER_TYPES[Math.floor(Math.random() * PRAYER_TYPES.length)];
-
-    const prayer = await generatePrayer(type);
-    await updateGist(prayer);
-
-    console.log('🙏 Done! Today\'s prayer has been published.');
+    const prayers = await generate50Prayers();
+    await updateGist(prayers);
+    console.log("🙏 Done! 50 prayers are ready for today.");
   } catch (err) {
     console.error('❌ Error:', err.message);
     process.exit(1);
