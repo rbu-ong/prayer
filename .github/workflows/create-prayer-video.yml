@@ -66,20 +66,24 @@ jobs:
           ffmpeg -stream_loop -1 -i music_src.mp3 -t $DURATION -af "afade=t=out:st=$((DURATION - 2)):d=2,volume=0.12" music.mp3 -y
 
       - name: Create prayer video
+        env:
+          PRAYER_TITLE: ${{ github.event.inputs.title }}
+          PRAYER_VERSE: ${{ github.event.inputs.verse }}
+          PRAYER_TEXT: ${{ github.event.inputs.text }}
+          PRAYER_DURATION: ${{ steps.duration.outputs.duration }}
         run: |
           chmod +x scripts/create-video.sh
-          bash scripts/create-video.sh \
-            "${{ github.event.inputs.title }}" \
-            "${{ github.event.inputs.verse }}" \
-            "${{ github.event.inputs.text }}" \
-            "${{ steps.duration.outputs.duration }}"
+          bash scripts/create-video.sh "$PRAYER_TITLE" "$PRAYER_VERSE" "$PRAYER_TEXT" "$PRAYER_DURATION"
 
       - name: Upload to YouTube
         env:
           YOUTUBE_CLIENT_ID:     ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: node scripts/upload-youtube.js "${{ github.event.inputs.title }}" "${{ github.event.inputs.verse }}" "${{ github.event.inputs.date }}"
+          PRAYER_TITLE: ${{ github.event.inputs.title }}
+          PRAYER_VERSE: ${{ github.event.inputs.verse }}
+          PRAYER_DATE:  ${{ github.event.inputs.date }}
+        run: node scripts/upload-youtube.js "$PRAYER_TITLE" "$PRAYER_VERSE" "$PRAYER_DATE"
 
       - name: Save video as artifact
         uses: actions/upload-artifact@v4
