@@ -16,13 +16,13 @@ on:
         description: 'Bible verse'
         required: false
         default: ''
-      date:
-        description: 'Date (YYYY-MM-DD)'
-        required: true
       text:
         description: 'Full prayer text'
         required: false
         default: ''
+      date:
+        description: 'Date (YYYY-MM-DD)'
+        required: true
 
 jobs:
   create-video:
@@ -33,8 +33,8 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg
-        run: sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg and tools
+        run: sudo apt-get install -y ffmpeg bc fonts-liberation fonts-dejavu
 
       - name: Download prayer MP3
         run: |
@@ -51,84 +51,28 @@ jobs:
 
       - name: Pick and download random background video
         run: |
-          BACKGROUNDS=(
-            "${{ secrets.BACKGROUND_VIDEO_URL_1 }}"
-            "${{ secrets.BACKGROUND_VIDEO_URL_2 }}"
-            "${{ secrets.BACKGROUND_VIDEO_URL_3 }}"
-          )
+          BACKGROUNDS=("${{ secrets.BACKGROUND_VIDEO_URL_1 }}" "${{ secrets.BACKGROUND_VIDEO_URL_2 }}" "${{ secrets.BACKGROUND_VIDEO_URL_3 }}")
           PICKED=${BACKGROUNDS[$RANDOM % ${#BACKGROUNDS[@]}]}
           echo "Selected: $PICKED"
           curl -L "$PICKED" -o background_src.mp4
-          echo "Downloaded: $(du -sh background_src.mp4)"
           DURATION=${{ steps.duration.outputs.duration }}
-          # Scale to 1080x1920 (vertical 9:16) and loop to match duration
-          ffmpeg -stream_loop -1 -i background_src.mp4 -t $DURATION \
-            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" \
-            -c:v libx264 -preset fast -an background.mp4 -y
+          ffmpeg -stream_loop -1 -i background_src.mp4 -t $DURATION -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" -c:v libx264 -preset fast -an background.mp4 -y
           echo "Background ready: $(du -sh background.mp4)"
 
       - name: Download background music
         run: |
           curl -L "${{ secrets.BACKGROUND_MUSIC_URL }}" -o music_src.mp3
           DURATION=${{ steps.duration.outputs.duration }}
-          ffmpeg -stream_loop -1 -i music_src.mp3 -t $DURATION \
-            -af "afade=t=out:st=$((DURATION - 2)):d=2,volume=0.12" \
-            music.mp3 -y
+          ffmpeg -stream_loop -1 -i music_src.mp3 -t $DURATION -af "afade=t=out:st=$((DURATION - 2)):d=2,volume=0.12" music.mp3 -y
 
-      - name: Install fonts
+      - name: Create prayer video
         run: |
-          sudo apt-get install -y fonts-liberation fonts-dejavu
-          fc-cache -f -v
-
-      - name: Prepare prayer text file
-        run: |
-          echo "${{ github.event.inputs.text }}" | fold -s -w 35 > /tmp/prayer.txt
-          echo "Prayer text:"
-          cat /tmp/prayer.txt
-
-      - name: Create prayer video with FFmpeg
-        run: |
-          TITLE="${{ github.event.inputs.title }}"
-          DURATION=${{ steps.duration.outputs.duration }}
-          RAW_VERSE="${{ github.event.inputs.verse }}"
-          PRAYER="${{ github.event.inputs.text }}"
-
-          # Split verse into quote and reference
-          VERSE_TEXT=$(echo "$RAW_VERSE" | sed 's/ — .*//')
-          VERSE_REF=$(echo "$RAW_VERSE" | grep -o '— .*' || echo '')
-          VERSE_TEXT="${VERSE_TEXT:0:70}"
-          VERSE_REF="${VERSE_REF:0:40}"
-
-          # Word-wrap prayer text at ~35 chars per line for readability
-          PRAYER_WRAPPED=$(echo "$PRAYER" | fold -s -w 35)
-
-          # Calculate scroll speed — scroll prayer text over middle 70% of duration
-          # Start scrolling at 2s, end 3s before video ends
-          SCROLL_DURATION=$((DURATION - 5))
-          # Each wrapped line is ~55px tall at fontsize 36
-          LINE_COUNT=$(echo "$PRAYER_WRAPPED" | wc -l)
-          TOTAL_TEXT_H=$((LINE_COUNT * 55))
-          # pixels per second to scroll through all lines in SCROLL_DURATION
-          SCROLL_SPEED=$(echo "scale=2; $TOTAL_TEXT_H / $SCROLL_DURATION" | bc)
-
-          # Write filter to a file to avoid YAML/shell escaping issues
-          cat > /tmp/filter.txt << FILTER
-[1:a]volume=2.5,afade=t=in:st=0:d=1,afade=t=out:st=$((DURATION - 2)):d=2[voice];[2:a]volume=0.12[music];[music][voice]amix=inputs=2:duration=first[audio];[0:v]drawtext=text='✝':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=100:fontcolor=0xFFDC64@0.95:x=(w-text_w)/2:y=60:shadowcolor=black:shadowx=3:shadowy=3,drawtext=text='Daily Prayer':fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:fontsize=40:fontcolor=0xFFDC64@0.70:x=(w-text_w)/2:y=185:shadowcolor=black:shadowx=2:shadowy=2,drawtext=text='${TITLE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf:fontsize=62:fontcolor=white@1.0:x=(w-text_w)/2:y=270:shadowcolor=black:shadowx=3:shadowy=3,drawtext=textfile=/tmp/prayer.txt:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=38:fontcolor=white@0.92:x=(w-text_w)/2:y=460+((t-2)*${SCROLL_SPEED}*-1):shadowcolor=black:shadowx=2:shadowy=2:enable='gte(t\,2)',drawtext=text='${VERSE_TEXT}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf:fontsize=34:fontcolor=0xFFDC64@0.90:x=(w-text_w)/2:y=1720:shadowcolor=black:shadowx=2:shadowy=2,drawtext=text='${VERSE_REF}':fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:fontsize=30:fontcolor=0xFFDC64@0.65:x=(w-text_w)/2:y=1770:shadowcolor=black:shadowx=1:shadowy=1[v]
-FILTER
-
-          ffmpeg \
-            -i background.mp4 \
-            -i prayer.mp3 \
-            -i music.mp3 \
-            -filter_complex_script /tmp/filter.txt \
-            -map "[v]" -map "[audio]" \
-            -t $DURATION \
-            -c:v libx264 -preset fast -crf 20 \
-            -c:a aac -b:a 192k \
-            -movflags +faststart \
-            output.mp4 -y
-
-          echo "Video created: $(du -sh output.mp4)"
+          chmod +x scripts/create-video.sh
+          bash scripts/create-video.sh \
+            "${{ github.event.inputs.title }}" \
+            "${{ github.event.inputs.verse }}" \
+            "${{ github.event.inputs.text }}" \
+            "${{ steps.duration.outputs.duration }}"
 
       - name: Upload to YouTube
         env:
@@ -137,7 +81,7 @@ FILTER
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: node scripts/upload-youtube.js "${{ github.event.inputs.title }}" "${{ github.event.inputs.verse }}" "${{ github.event.inputs.date }}"
 
-      - name: Save video as artifact (backup)
+      - name: Save video as artifact
         uses: actions/upload-artifact@v4
         with:
           name: prayer-video-${{ github.event.inputs.date }}-${{ github.event.inputs.prayerId }}
