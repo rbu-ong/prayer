@@ -5,9 +5,17 @@ const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 
-const title  = process.argv[2] || 'Daily Prayer';
-const verse  = process.argv[3] || '';
-const date   = process.argv[4] || new Date().toISOString().slice(0, 10);
+const rawTitle = process.argv[2] || '';
+const verse    = process.argv[3] || '';
+const date     = process.argv[4] || new Date().toISOString().slice(0, 10);
+
+// Build a meaningful title: use prayer title, or "Daily Prayer — [Verse Ref]", or fallback
+const verseRef = verse.match(/[—–-]\s*(.+)$/)?.[1]?.trim() || '';
+const title = rawTitle && rawTitle !== 'Daily Prayer'
+  ? rawTitle
+  : verseRef
+    ? `Daily Prayer — ${verseRef}`
+    : 'Daily Prayer';
 
 const {
   YOUTUBE_CLIENT_ID,
