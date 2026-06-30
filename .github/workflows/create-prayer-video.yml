@@ -19,6 +19,10 @@ on:
       date:
         description: 'Date (YYYY-MM-DD)'
         required: true
+      text:
+        description: 'Full prayer text'
+        required: false
+        default: ''
 
 jobs:
   create-video:
@@ -75,29 +79,52 @@ jobs:
           sudo apt-get install -y fonts-liberation fonts-dejavu
           fc-cache -f -v
 
+      - name: Prepare prayer text file
+        run: |
+          echo "${{ github.event.inputs.text }}" | fold -s -w 35 > /tmp/prayer.txt
+          echo "Prayer text:"
+          cat /tmp/prayer.txt
+
       - name: Create prayer video with FFmpeg
         run: |
           TITLE="${{ github.event.inputs.title }}"
           DURATION=${{ steps.duration.outputs.duration }}
           RAW_VERSE="${{ github.event.inputs.verse }}"
-          # Split verse into two lines at the dash (before reference)
+          PRAYER="${{ github.event.inputs.text }}"
+
+          # Split verse into quote and reference
           VERSE_TEXT=$(echo "$RAW_VERSE" | sed 's/ — .*//')
           VERSE_REF=$(echo "$RAW_VERSE" | grep -o '— .*' || echo '')
-          # Truncate if still too long
           VERSE_TEXT="${VERSE_TEXT:0:70}"
           VERSE_REF="${VERSE_REF:0:40}"
+
+          # Word-wrap prayer text at ~35 chars per line for readability
+          PRAYER_WRAPPED=$(echo "$PRAYER" | fold -s -w 35)
+
+          # Calculate scroll speed — scroll prayer text over middle 70% of duration
+          # Start scrolling at 2s, end 3s before video ends
+          SCROLL_DURATION=$((DURATION - 5))
+          # Each wrapped line is ~55px tall at fontsize 36
+          LINE_COUNT=$(echo "$PRAYER_WRAPPED" | wc -l)
+          TOTAL_TEXT_H=$((LINE_COUNT * 55))
+          # pixels per second to scroll through all lines in SCROLL_DURATION
+          SCROLL_SPEED=$(echo "scale=2; $TOTAL_TEXT_H / $SCROLL_DURATION" | bc)
 
           ffmpeg \
             -i background.mp4 \
             -i prayer.mp3 \
             -i music.mp3 \
             -filter_complex \
-            "[1:a]volume=2.5,afade=t=in:st=0:d=1,afade=t=out:st=$((DURATION - 2)):d=2[voice];[2:a]volume=0.12[music];[music][voice]amix=inputs=2:duration=first[audio];[0:v]\
-drawtext=text='✝':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=120:fontcolor=0xFFDC64@0.95:x=(w-text_w)/2:y=h*0.07:shadowcolor=black:shadowx=3:shadowy=3,\
-drawtext=text='Daily Prayer':fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:fontsize=44:fontcolor=0xFFDC64@0.75:x=(w-text_w)/2:y=h*0.20:shadowcolor=black:shadowx=2:shadowy=2:text_shaping=1,\
-drawtext=text='${TITLE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf:fontsize=72:fontcolor=white@1.0:x=(w-text_w)/2:y=h*0.44:shadowcolor=black:shadowx=3:shadowy=3,\
-drawtext=text='${VERSE_TEXT}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf:fontsize=38:fontcolor=0xFFDC64@0.90:x=(w-text_w)/2:y=h*0.74:shadowcolor=black:shadowx=2:shadowy=2,\
-drawtext=text='${VERSE_REF}':fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:fontsize=34:fontcolor=0xFFDC64@0.65:x=(w-text_w)/2:y=h*0.81:shadowcolor=black:shadowx=1:shadowy=1\
+            "[1:a]volume=2.5,afade=t=in:st=0:d=1,afade=t=out:st=$((DURATION - 2)):d=2[voice];\
+[2:a]volume=0.12[music];\
+[music][voice]amix=inputs=2:duration=first[audio];\
+[0:v]\
+drawtext=text='✝':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=100:fontcolor=0xFFDC64@0.95:x=(w-text_w)/2:y=60:shadowcolor=black:shadowx=3:shadowy=3,\
+drawtext=text='Daily Prayer':fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:fontsize=40:fontcolor=0xFFDC64@0.70:x=(w-text_w)/2:y=185:shadowcolor=black:shadowx=2:shadowy=2,\
+drawtext=text='${TITLE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf:fontsize=62:fontcolor=white@1.0:x=(w-text_w)/2:y=270:shadowcolor=black:shadowx=3:shadowy=3,\
+drawtext=textfile=/tmp/prayer.txt:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=38:fontcolor=white@0.92:x=(w-text_w)/2:y=460+((t-2)*${SCROLL_SPEED}*-1):shadowcolor=black:shadowx=2:shadowy=2:enable='gte(t,2)',\
+drawtext=text='${VERSE_TEXT}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf:fontsize=34:fontcolor=0xFFDC64@0.90:x=(w-text_w)/2:y=1720:shadowcolor=black:shadowx=2:shadowy=2,\
+drawtext=text='${VERSE_REF}':fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:fontsize=30:fontcolor=0xFFDC64@0.65:x=(w-text_w)/2:y=1770:shadowcolor=black:shadowx=1:shadowy=1\
 [v]" \
             -map "[v]" -map "[audio]" \
             -t $DURATION \
