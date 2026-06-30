@@ -79,7 +79,7 @@ jobs:
             -i prayer.mp3 \
             -i music.mp3 \
             -filter_complex \
-            "[1:a]afade=t=in:st=0:d=1,afade=t=out:st=$((DURATION - 2)):d=2[voice];[2:a][voice]amix=inputs=2:duration=first[audio];[0:v]drawtext=text='✝':fontsize=60:fontcolor=0xFFDC64E6:x=(w-text_w)/2:y=h*0.12:shadowcolor=black:shadowx=2:shadowy=2,drawtext=text='Daily Prayer':fontsize=22:fontcolor=0xFFDC6499:x=(w-text_w)/2:y=h*0.22:shadowcolor=black:shadowx=1:shadowy=1,drawtext=text='${TITLE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=38:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-40:shadowcolor=black:shadowx=2:shadowy=2,drawtext=text='${VERSE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf:fontsize=20:fontcolor=0xFFDC64CC:x=(w-text_w)/2:y=(h-text_h)/2+40:shadowcolor=black:shadowx=1:shadowy=1[v]" \
+            "[1:a]volume=2.0,afade=t=in:st=0:d=1,afade=t=out:st=$((DURATION - 2)):d=2[voice];[2:a]volume=0.08[music];[music][voice]amix=inputs=2:duration=first[audio];[0:v]drawtext=text='✝':fontsize=60:fontcolor=0xFFDC64E6:x=(w-text_w)/2:y=h*0.12:shadowcolor=black:shadowx=2:shadowy=2,drawtext=text='Daily Prayer':fontsize=22:fontcolor=0xFFDC6499:x=(w-text_w)/2:y=h*0.22:shadowcolor=black:shadowx=1:shadowy=1,drawtext=text='${TITLE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=38:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2-40:shadowcolor=black:shadowx=2:shadowy=2,drawtext=text='${VERSE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf:fontsize=20:fontcolor=0xFFDC64CC:x=(w-text_w)/2:y=(h-text_h)/2+40:shadowcolor=black:shadowx=1:shadowy=1[v]" \
             -map "[v]" -map "[audio]" \
             -t $DURATION \
             -c:v libx264 -preset fast -crf 22 \
