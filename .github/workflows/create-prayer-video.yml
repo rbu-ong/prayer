@@ -27,7 +27,7 @@ on:
 jobs:
   create-video:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.mp3Url != '' }}
+    if: github.event.inputs.mp3Url != ''
 
     steps:
       - name: Checkout repo
