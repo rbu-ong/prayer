@@ -46,46 +46,62 @@ jobs:
 
       - name: Pick and download random background video
         run: |
-          # Randomly pick one of 3 background videos from R2
           BACKGROUNDS=(
             "${{ secrets.BACKGROUND_VIDEO_URL_1 }}"
             "${{ secrets.BACKGROUND_VIDEO_URL_2 }}"
             "${{ secrets.BACKGROUND_VIDEO_URL_3 }}"
           )
           PICKED=${BACKGROUNDS[$RANDOM % ${#BACKGROUNDS[@]}]}
-          echo "Selected background: $PICKED"
+          echo "Selected: $PICKED"
           curl -L "$PICKED" -o background_src.mp4
           echo "Downloaded: $(du -sh background_src.mp4)"
-          # Trim/loop to match prayer duration
           DURATION=${{ steps.duration.outputs.duration }}
-          ffmpeg -stream_loop -1 -i background_src.mp4 -t $DURATION -c copy background.mp4 -y
+          # Scale to 1080x1920 (vertical 9:16) and loop to match duration
+          ffmpeg -stream_loop -1 -i background_src.mp4 -t $DURATION \
+            -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920" \
+            -c:v libx264 -preset fast -an background.mp4 -y
+          echo "Background ready: $(du -sh background.mp4)"
 
       - name: Download background music
         run: |
           curl -L "${{ secrets.BACKGROUND_MUSIC_URL }}" -o music_src.mp3
           DURATION=${{ steps.duration.outputs.duration }}
-          # Loop and trim music to match duration, fade out last 2s
           ffmpeg -stream_loop -1 -i music_src.mp3 -t $DURATION \
-            -af "afade=t=out:st=$((DURATION - 2)):d=2,volume=0.15" \
+            -af "afade=t=out:st=$((DURATION - 2)):d=2,volume=0.12" \
             music.mp3 -y
+
+      - name: Install fonts
+        run: |
+          sudo apt-get install -y fonts-liberation fonts-dejavu
+          fc-cache -f -v
 
       - name: Create prayer video with FFmpeg
         run: |
           TITLE="${{ github.event.inputs.title }}"
           DURATION=${{ steps.duration.outputs.duration }}
-          # Truncate verse to max 80 chars so it fits on one line
           RAW_VERSE="${{ github.event.inputs.verse }}"
-          VERSE="${RAW_VERSE:0:80}"
+          # Split verse into two lines at the dash (before reference)
+          VERSE_TEXT=$(echo "$RAW_VERSE" | sed 's/ — .*//')
+          VERSE_REF=$(echo "$RAW_VERSE" | grep -o '— .*' || echo '')
+          # Truncate if still too long
+          VERSE_TEXT="${VERSE_TEXT:0:70}"
+          VERSE_REF="${VERSE_REF:0:40}"
 
           ffmpeg \
             -i background.mp4 \
             -i prayer.mp3 \
             -i music.mp3 \
             -filter_complex \
-            "[1:a]volume=2.0,afade=t=in:st=0:d=1,afade=t=out:st=$((DURATION - 2)):d=2[voice];[2:a]volume=0.08[music];[music][voice]amix=inputs=2:duration=first[audio];[0:v]drawtext=text='✝':fontsize=60:fontcolor=0xFFDC64E6:x=(w-text_w)/2:y=h*0.08:shadowcolor=black:shadowx=2:shadowy=2,drawtext=text='Daily Prayer':fontsize=22:fontcolor=0xFFDC6499:x=(w-text_w)/2:y=h*0.18:shadowcolor=black:shadowx=1:shadowy=1,drawtext=text='${TITLE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=36:fontcolor=white:x=(w-text_w)/2:y=h*0.42:shadowcolor=black:shadowx=2:shadowy=2,drawtext=text='${VERSE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf:fontsize=18:fontcolor=0xFFDC64CC:x=w*0.05:y=h*0.82:shadowcolor=black:shadowx=1:shadowy=1:fix_bounds=1[v]" \
+            "[1:a]volume=2.5,afade=t=in:st=0:d=1,afade=t=out:st=$((DURATION - 2)):d=2[voice];[2:a]volume=0.12[music];[music][voice]amix=inputs=2:duration=first[audio];[0:v]\
+drawtext=text='✝':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:fontsize=120:fontcolor=0xFFDC64@0.95:x=(w-text_w)/2:y=h*0.07:shadowcolor=black:shadowx=3:shadowy=3,\
+drawtext=text='Daily Prayer':fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:fontsize=44:fontcolor=0xFFDC64@0.75:x=(w-text_w)/2:y=h*0.20:shadowcolor=black:shadowx=2:shadowy=2:text_shaping=1,\
+drawtext=text='${TITLE}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf:fontsize=72:fontcolor=white@1.0:x=(w-text_w)/2:y=h*0.44:shadowcolor=black:shadowx=3:shadowy=3,\
+drawtext=text='${VERSE_TEXT}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf:fontsize=38:fontcolor=0xFFDC64@0.90:x=(w-text_w)/2:y=h*0.74:shadowcolor=black:shadowx=2:shadowy=2,\
+drawtext=text='${VERSE_REF}':fontfile=/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf:fontsize=34:fontcolor=0xFFDC64@0.65:x=(w-text_w)/2:y=h*0.81:shadowcolor=black:shadowx=1:shadowy=1\
+[v]" \
             -map "[v]" -map "[audio]" \
             -t $DURATION \
-            -c:v libx264 -preset fast -crf 22 \
+            -c:v libx264 -preset fast -crf 20 \
             -c:a aac -b:a 192k \
             -movflags +faststart \
             output.mp4 -y
