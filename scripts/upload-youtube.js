@@ -9,13 +9,8 @@ const rawTitle = process.argv[2] || '';
 const verse    = process.argv[3] || '';
 const date     = process.argv[4] || new Date().toISOString().slice(0, 10);
 
-// Build a meaningful title: use prayer title, or "Daily Prayer — [Verse Ref]", or fallback
-const verseRef = verse.match(/[—–-]\s*(.+)$/)?.[1]?.trim() || '';
-const title = rawTitle && rawTitle !== 'Daily Prayer'
-  ? rawTitle
-  : verseRef
-    ? `Daily Prayer — ${verseRef}`
-    : 'Daily Prayer';
+// YouTube title = full verse (e.g. "Great is the Lord — Psalm 145:3"), fallback to prayer title
+const title = verse || rawTitle || 'Daily Prayer';
 
 const {
   YOUTUBE_CLIENT_ID,
