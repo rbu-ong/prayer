@@ -43,10 +43,19 @@ jobs:
           echo "duration=$TOTAL" >> $GITHUB_OUTPUT
           echo "Prayer duration: ${DURATION}s, video will be ${TOTAL}s"
 
-      - name: Download background video
+      - name: Pick and download random background video
         run: |
-          curl -L "${{ secrets.BACKGROUND_VIDEO_URL }}" -o background_src.mp4
-          # Loop background to match audio duration
+          # Randomly pick one of 3 background videos from R2
+          BACKGROUNDS=(
+            "${{ secrets.BACKGROUND_VIDEO_URL_1 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_2 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_3 }}"
+          )
+          PICKED=${BACKGROUNDS[$RANDOM % ${#BACKGROUNDS[@]}]}
+          echo "Selected background: $PICKED"
+          curl -L "$PICKED" -o background_src.mp4
+          echo "Downloaded: $(du -sh background_src.mp4)"
+          # Trim/loop to match prayer duration
           DURATION=${{ steps.duration.outputs.duration }}
           ffmpeg -stream_loop -1 -i background_src.mp4 -t $DURATION -c copy background.mp4 -y
 
