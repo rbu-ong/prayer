@@ -1,0 +1,117 @@
+name: Create Prayer Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      mp3Url:
+        description: 'Public R2 URL of the prayer MP3'
+        required: true
+      prayerId:
+        description: 'Prayer ID'
+        required: true
+      title:
+        description: 'Prayer title'
+        required: true
+      verse:
+        description: 'Bible verse'
+        required: true
+      date:
+        description: 'Date (YYYY-MM-DD)'
+        required: true
+
+jobs:
+  create-video:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: sudo apt-get install -y ffmpeg
+
+      - name: Download prayer MP3
+        run: |
+          curl -L "${{ github.event.inputs.mp3Url }}" -o prayer.mp3
+          echo "MP3 downloaded: $(du -sh prayer.mp3)"
+
+      - name: Get MP3 duration
+        id: duration
+        run: |
+          DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 prayer.mp3 | cut -d. -f1)
+          TOTAL=$((DURATION + 3))
+          echo "duration=$TOTAL" >> $GITHUB_OUTPUT
+          echo "Prayer duration: ${DURATION}s, video will be ${TOTAL}s"
+
+      - name: Download background video
+        run: |
+          curl -L "${{ secrets.BACKGROUND_VIDEO_URL }}" -o background_src.mp4
+          # Loop background to match audio duration
+          DURATION=${{ steps.duration.outputs.duration }}
+          ffmpeg -stream_loop -1 -i background_src.mp4 -t $DURATION -c copy background.mp4 -y
+
+      - name: Download background music
+        run: |
+          curl -L "${{ secrets.BACKGROUND_MUSIC_URL }}" -o music_src.mp3
+          DURATION=${{ steps.duration.outputs.duration }}
+          # Loop and trim music to match duration, fade out last 2s
+          ffmpeg -stream_loop -1 -i music_src.mp3 -t $DURATION \
+            -af "afade=t=out:st=$((DURATION - 2)):d=2,volume=0.15" \
+            music.mp3 -y
+
+      - name: Create prayer video with FFmpeg
+        run: |
+          TITLE="${{ github.event.inputs.title }}"
+          VERSE="${{ github.event.inputs.verse }}"
+          DURATION=${{ steps.duration.outputs.duration }}
+
+          ffmpeg \
+            -i background.mp4 \
+            -i prayer.mp3 \
+            -i music.mp3 \
+            -filter_complex "
+              [1:a]afade=t=in:st=0:d=1,afade=t=out:st=$((DURATION - 2)):d=2[voice];
+              [2:a][voice]amix=inputs=2:duration=first[audio];
+              [0:v]
+                drawtext=text='✝':
+                  fontsize=60:fontcolor=rgba(255\,220\,100\,0.9):
+                  x=(w-text_w)/2:y=h*0.12:
+                  shadowcolor=black:shadowx=2:shadowy=2,
+                drawtext=text='Daily Prayer':
+                  fontsize=22:fontcolor=rgba(255\,220\,100\,0.6):
+                  x=(w-text_w)/2:y=h*0.22:
+                  shadowcolor=black:shadowx=1:shadowy=1,
+                drawtext=text='${TITLE}':
+                  fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf:
+                  fontsize=38:fontcolor=white:
+                  x=(w-text_w)/2:y=(h-text_h)/2-40:
+                  shadowcolor=black:shadowx=2:shadowy=2,
+                drawtext=text='${VERSE}':
+                  fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf:
+                  fontsize=20:fontcolor=rgba(255\,220\,100\,0.8):
+                  x=(w-text_w)/2:y=(h-text_h)/2+40:
+                  shadowcolor=black:shadowx=1:shadowy=1
+              [v]
+            " \
+            -map "[v]" -map "[audio]" \
+            -t $DURATION \
+            -c:v libx264 -preset fast -crf 22 \
+            -c:a aac -b:a 192k \
+            -movflags +faststart \
+            output.mp4 -y
+
+          echo "Video created: $(du -sh output.mp4)"
+
+      - name: Upload to YouTube
+        env:
+          YOUTUBE_CLIENT_ID:     ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: node scripts/upload-youtube.js "${{ github.event.inputs.title }}" "${{ github.event.inputs.verse }}" "${{ github.event.inputs.date }}"
+
+      - name: Save video as artifact (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: prayer-video-${{ github.event.inputs.date }}-${{ github.event.inputs.prayerId }}
+          path: output.mp4
+          retention-days: 7
