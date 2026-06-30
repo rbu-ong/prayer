@@ -14,7 +14,8 @@ on:
         required: true
       verse:
         description: 'Bible verse'
-        required: true
+        required: false
+        default: ''
       date:
         description: 'Date (YYYY-MM-DD)'
         required: true
