@@ -38,7 +38,7 @@ FADE_OUT=$((DURATION - 2))
 # Build filter — all text via textfile= to avoid special char escaping
 printf '%s' \
   "[1:a]volume=2.5,afade=t=in:st=0:d=1,afade=t=out:st=${FADE_OUT}:d=2[voice];" \
-  "[2:a]volume=0.65[music];" \
+  "[2:a]volume=1.0[music];" \
   "[music][voice]amix=inputs=2:duration=first[audio];" \
   "[0:v]" \
   "drawtext=text='Daily Prayer':fontfile=${FONT_SANS}:fontsize=42:fontcolor=0xFFDC64@0.75:x=(w-text_w)/2:y=80:shadowcolor=black:shadowx=2:shadowy=2," \
