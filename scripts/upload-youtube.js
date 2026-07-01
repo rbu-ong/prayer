@@ -54,7 +54,7 @@ async function uploadVideo(accessToken) {
   const videoSize = fs.statSync(videoPath).size;
 
   const videoTitle       = title;
-  const videoDescription = `${verse}\n\n✝ A heartfelt Christian prayer for today.\n\nInstall the Daily Prayer Chrome Extension to receive a fresh prayer every day:\nhttps://chromewebstore.google.com\n\n#ChristianPrayer #DailyPrayer #Faith #Bible`;
+  const videoDescription = `${verse}\n\n✝ A heartfelt Christian prayer for today.\n\n#ChristianPrayer #DailyPrayer #Faith #Bible`;
   const metadata = {
     snippet: {
       title:       videoTitle,
