@@ -65,8 +65,25 @@ jobs:
 
       - name: Pick and download random background video
         run: |
-          BACKGROUNDS=("${{ secrets.BACKGROUND_VIDEO_URL_1 }}" "${{ secrets.BACKGROUND_VIDEO_URL_2 }}" "${{ secrets.BACKGROUND_VIDEO_URL_3 }}")
-          PICKED=${BACKGROUNDS[$RANDOM % ${#BACKGROUNDS[@]}]}
+          BACKGROUNDS=(
+            "${{ secrets.BACKGROUND_VIDEO_URL_1 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_2 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_3 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_4 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_5 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_6 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_7 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_8 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_9 }}"
+            "${{ secrets.BACKGROUND_VIDEO_URL_10 }}"
+          )
+          # Filter out empty entries (secrets not yet set)
+          FILLED=()
+          for url in "${BACKGROUNDS[@]}"; do
+            [ -n "$url" ] && FILLED+=("$url")
+          done
+          IDX=$(( $(od -An -N2 -tu2 /dev/urandom) % ${#FILLED[@]} ))
+          PICKED=${FILLED[$IDX]}
           echo "Selected: $PICKED"
           curl -L "$PICKED" -o background_src.mp4
           DURATION=${{ steps.duration.outputs.duration }}
