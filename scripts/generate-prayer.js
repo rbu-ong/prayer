@@ -100,6 +100,7 @@ Rules for each prayer:
 - Written in first person addressing God / Lord / Heavenly Father
 - Uplifting and grounded in Christian faith
 - Each one must feel unique — no repetitive phrasing across prayers
+- End every prayer with "Amen." on its own as the final word — never "amen." or "Amen," just "Amen."
 
 Respond ONLY with this JSON structure:
 {
