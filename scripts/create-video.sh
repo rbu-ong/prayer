@@ -2,20 +2,14 @@
 set -e
 
 TITLE="$1"
-PRAYER="$3"
-DURATION="$4"
+VERSE="$2"
+DURATION="$3"
 
 echo "=== Inputs ==="
 echo "Title:    $TITLE"
 echo "Duration: $DURATION"
 
-# Write text to files — avoids ALL FFmpeg escaping issues
-printf '%s' "$TITLE"  > /tmp/title.txt
-echo "$PRAYER" | fold -s -w 30 > /tmp/prayer.txt
-
-echo "Title file:"
-cat /tmp/title.txt
-echo "Prayer lines: $(wc -l < /tmp/prayer.txt)"
+printf '%s' "$TITLE" > /tmp/title.txt
 
 FONT_SERIF="/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 FONT_SERIF_BOLD="/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
@@ -23,10 +17,61 @@ FONT_SANS="/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
 
 FADE_OUT=$((DURATION - 2))
 
-# Video layout:
-#   y=80   — "Daily Prayer" gold label
-#   y=160  — Prayer title, white bold
-#   y=310  — Prayer body text
+# Generate ASS caption file from word timestamps
+python3 - << 'PYEOF'
+import json, sys, os
+
+with open('/tmp/timestamps.json') as f:
+    words = json.load(f)
+
+# Group into 2 words per caption
+groups = []
+i = 0
+while i < len(words):
+    group = words[i:i+2]
+    text  = ' '.join(w['word'] for w in group)
+    start = group[0]['start']
+    end   = group[-1]['end']
+    # Add a tiny gap so captions don't bleed into each other
+    groups.append((start, end, text))
+    i += 2
+
+def fmt(t):
+    h  = int(t // 3600)
+    m  = int((t % 3600) // 60)
+    s  = t % 60
+    return f"{h}:{m:02d}:{s:05.2f}"
+
+# ASS subtitle file
+# Alignment 2 = bottom-center, MarginV pushes it up from the bottom
+ass = """\
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,95,&H00FFFFFF,&H000000FF,&H00000000,&H99000000,-1,0,0,0,100,100,3,0,1,6,3,2,60,60,420,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+for start, end, text in groups:
+    ass += f"Dialogue: 0,{fmt(start)},{fmt(end)},Default,,0,0,0,,{text}\n"
+
+with open('/tmp/captions.ass', 'w', encoding='utf-8') as f:
+    f.write(ass)
+
+print(f"Generated {len(groups)} caption groups")
+PYEOF
+
+echo "=== Captions ==="
+cat /tmp/captions.ass
+
+# Video filter — header + title overlays, captions burned in via ASS
 printf '%s' \
   "[1:a]volume=2.5,afade=t=in:st=0:d=1,afade=t=out:st=${FADE_OUT}:d=2[voice];" \
   "[2:a]volume=1.0[music];" \
@@ -34,7 +79,7 @@ printf '%s' \
   "[0:v]" \
   "drawtext=text='Daily Prayer':fontfile=${FONT_SANS}:fontsize=44:fontcolor=0xFFDC64@0.85:x=(w-text_w)/2:y=80:shadowcolor=black:shadowx=2:shadowy=2," \
   "drawtext=textfile=/tmp/title.txt:fontfile=${FONT_SERIF_BOLD}:fontsize=66:fontcolor=white@1.0:x=(w-text_w)/2:y=160:shadowcolor=black:shadowx=3:shadowy=3," \
-  "drawtext=textfile=/tmp/prayer.txt:fontfile=${FONT_SERIF}:fontsize=46:fontcolor=white@0.95:x=(w-text_w)/2:y=320:line_spacing=14:shadowcolor=black:shadowx=2:shadowy=2" \
+  "ass=/tmp/captions.ass" \
   "[v]" \
   > /tmp/filter.txt
 

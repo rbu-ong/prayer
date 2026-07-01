@@ -6,6 +6,10 @@ on:
       mp3Url:
         description: 'Public R2 URL of the prayer MP3'
         required: true
+      timestampsUrl:
+        description: 'Public R2 URL of the word timestamps JSON'
+        required: false
+        default: ''
       prayerId:
         description: 'Prayer ID'
         required: true
@@ -33,8 +37,8 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg and tools
-        run: sudo apt-get install -y ffmpeg bc fonts-liberation fonts-dejavu
+      - name: Install dependencies
+        run: sudo apt-get install -y ffmpeg bc fonts-liberation fonts-dejavu python3
 
       - name: Download prayer MP3
         run: |
@@ -48,6 +52,16 @@ jobs:
           TOTAL=$((DURATION + 3))
           echo "duration=$TOTAL" >> $GITHUB_OUTPUT
           echo "Prayer duration: ${DURATION}s, video will be ${TOTAL}s"
+
+      - name: Download word timestamps
+        run: |
+          if [ -n "${{ github.event.inputs.timestampsUrl }}" ]; then
+            curl -L "${{ github.event.inputs.timestampsUrl }}" -o /tmp/timestamps.json
+            echo "Timestamps downloaded: $(wc -c < /tmp/timestamps.json) bytes"
+          else
+            echo "[]" > /tmp/timestamps.json
+            echo "No timestamps URL provided"
+          fi
 
       - name: Pick and download random background video
         run: |
@@ -67,13 +81,12 @@ jobs:
 
       - name: Create prayer video
         env:
-          PRAYER_TITLE: ${{ github.event.inputs.title }}
-          PRAYER_VERSE: ${{ github.event.inputs.verse }}
-          PRAYER_TEXT: ${{ github.event.inputs.text }}
+          PRAYER_TITLE:    ${{ github.event.inputs.title }}
+          PRAYER_VERSE:    ${{ github.event.inputs.verse }}
           PRAYER_DURATION: ${{ steps.duration.outputs.duration }}
         run: |
           chmod +x scripts/create-video.sh
-          bash scripts/create-video.sh "$PRAYER_TITLE" "$PRAYER_VERSE" "$PRAYER_TEXT" "$PRAYER_DURATION"
+          bash scripts/create-video.sh "$PRAYER_TITLE" "$PRAYER_VERSE" "$PRAYER_DURATION"
 
       - name: Upload to YouTube
         env:
