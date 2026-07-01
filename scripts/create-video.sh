@@ -14,7 +14,7 @@ printf '%s' "$TITLE" > /tmp/title.txt
 # Wrap long titles to 2 lines, splitting near the middle word boundary
 python3 -c "
 title = open('/tmp/title.txt').read().strip()
-if len(title) > 28:
+if len(title) > 20:
     words = title.split()
     half = len(title) // 2
     cum = 0
