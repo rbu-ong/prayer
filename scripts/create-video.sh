@@ -11,6 +11,24 @@ echo "Duration: $DURATION"
 
 printf '%s' "$TITLE" > /tmp/title.txt
 
+# Wrap long titles to 2 lines, splitting near the middle word boundary
+python3 -c "
+title = open('/tmp/title.txt').read().strip()
+if len(title) > 28:
+    words = title.split()
+    half = len(title) // 2
+    cum = 0
+    split = len(words) // 2
+    for i, w in enumerate(words[:-1]):
+        cum += len(w) + 1
+        if cum >= half:
+            split = i + 1
+            break
+    line1 = ' '.join(words[:split])
+    line2 = ' '.join(words[split:])
+    open('/tmp/title.txt', 'w').write(line1 + '\n' + line2)
+"
+
 FONT_SERIF="/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
 FONT_SERIF_BOLD="/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
 FONT_SANS="/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
@@ -78,7 +96,7 @@ printf '%s' \
   "[music][voice]amix=inputs=2:duration=first[audio];" \
   "[0:v]" \
   "drawtext=text='Daily Prayer':fontfile=${FONT_SANS}:fontsize=44:fontcolor=0xFFDC64@0.85:x=(w-text_w)/2:y=80:shadowcolor=black:shadowx=2:shadowy=2," \
-  "drawtext=textfile=/tmp/title.txt:fontfile=${FONT_SERIF_BOLD}:fontsize=66:fontcolor=white@1.0:x=(w-text_w)/2:y=160:shadowcolor=black:shadowx=3:shadowy=3," \
+  "drawtext=textfile=/tmp/title.txt:fontfile=${FONT_SERIF_BOLD}:fontsize=66:fontcolor=white@1.0:x=(w-text_w)/2:y=155:shadowcolor=black:shadowx=3:shadowy=3:line_spacing=10," \
   "ass=/tmp/captions.ass" \
   "[v]" \
   > /tmp/filter.txt
